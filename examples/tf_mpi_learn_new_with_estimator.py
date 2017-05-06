@@ -62,10 +62,9 @@ model_length = 128
 n_inputs = 1
 rnn_size = 100
 batch_size = 128
-num_epochs = 20000
 n_outputs = 1
 
-def model_fn(features, targets, mode, params):
+def model_fn(features, labels, mode, conf):
   """Model function for Estimator."""
 
   # Define weights
@@ -88,16 +87,14 @@ def model_fn(features, targets, mode, params):
   x = [tf.matmul(x[i], weights['out']) + biases['out'] for i in range(model_length)]
   x = tf.stack(x)
   predictions = tf.transpose(x, [1, 0, 2])
-  #predictions_dict = {"ages": predictions}
+  predictions_dict = {"whatever": predictions}
 
   # Define loss and optimizer
-  loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=predictions, labels=targets))
+  loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=predictions, labels=labels))
   opt = tf.train.AdamOptimizer(FLAGS.learning_rate)
 
-  #FIXME
   replicas_to_aggregate = num_tasks
 
-  #FIXME
   opt = tf.train.SyncReplicasOptimizer(
       opt,
       replicas_to_aggregate=replicas_to_aggregate,
@@ -110,14 +107,14 @@ def model_fn(features, targets, mode, params):
   eval_metric_ops = {
       "rmse":
           tf.metrics.root_mean_squared_error(
-              tf.cast(targets, tf.float64), predictions)
+              tf.cast(labels, tf.float64), predictions)
   }
 
-  #train_op = tf.contrib.layers.optimize_loss(
-  #    loss=loss,
-  #    global_step=tf.contrib.framework.get_global_step(),
-  #    learning_rate=params["learning_rate"],
-  #    optimizer="SGD")
+  train_op = tf.contrib.layers.optimize_loss(
+      loss=loss,
+      global_step=tf.contrib.framework.get_global_step(),
+      learning_rate=conf["model"]["lr"],
+      optimizer="SGD")
 
   return model_fn_lib.ModelFnOps(
       mode=mode,
@@ -177,43 +174,25 @@ def main(unused_argv):
         img = tf.placeholder(tf.float32, [batch_size, model_length, n_inputs])
         labels = tf.placeholder(tf.float32, [batch_size, model_length, n_outputs]) #rnn_size])
 
-        '''
-        # Define weights
-        weights = {
-            'out': tf.Variable(tf.random_normal([rnn_size, n_outputs]))
-        }
-        biases = {
-            'out': tf.Variable(tf.random_normal([n_outputs]))
-        }
 
-        num_layers = 5
-        stacked_lstm = tf.contrib.rnn.MultiRNNCell(
-            [
-                tf.contrib.rnn.DropoutWrapper(tf.contrib.rnn.BasicLSTMCell(rnn_size, forget_bias=1.0, state_is_tuple=True),output_keep_prob=0.5)
-                for _ in range(num_layers)
-               ])
-        outputs, final_state = tf.nn.dynamic_rnn(stacked_lstm, img, dtype=tf.float32, time_major=False)
 
-        x = tf.unstack(outputs, axis=1)
-        x = [tf.matmul(x[i], weights['out']) + biases['out'] for i in range(model_length)]
-        #x = [fully_connected(x[i],n_outputs,activation='linear') for i in range(model_length)]
-        x = tf.stack(x)
-        pred = tf.transpose(x, [1, 0, 2])
+        #FIXME where is the opt?
+        sync_replicas_hook = opt.make_session_run_hook(is_chief)
 
-        # Define loss and optimizer
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels=labels))
-        opt = tf.train.AdamOptimizer(FLAGS.learning_rate)
+        # Instantiate Estimator
+        nn = tf.contrib.learn.Estimator(model_fn=model_fn, params=conf,hooks=[sync_replicas_hook])
 
-        replicas_to_aggregate = num_tasks
+        # Fit
+        #Is this the whole dataset? Or are we training on batches
+        nn.fit(x=training_set.data, y=training_set.target, steps=5000)
 
-        opt = tf.train.SyncReplicasOptimizer(
-            opt,
-            replicas_to_aggregate=replicas_to_aggregate,
-            total_num_replicas=num_tasks,
-            name="frnn_sync_replicas")
+        # Score accuracy
+        ev = nn.evaluate(x=test_set.data, y=test_set.target, steps=1)
+        print("Loss: %s" % ev["loss"])
+        print("Root Mean Squared Error: %s" % ev["rmse"])
 
-        train_step = opt.minimize(loss, global_step=global_step)
-        '''
+
+
 
         local_init_op = opt.local_step_init_op
         if is_chief:
