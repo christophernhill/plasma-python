@@ -8,10 +8,12 @@ from keras.layers.pooling import MaxPooling1D
 from keras.utils.data_utils import get_file
 from keras.layers.wrappers import TimeDistributed
 from keras.layers.merge import Concatenate
+from keras.layers import merge
 from keras.callbacks import Callback
 from keras.optimizers import *
 from keras.regularizers import l1,l2,l1_l2
 
+from plasma.utils.attention_utils import get_activations, get_data_recurrent
 
 import keras.backend as K
 
@@ -20,6 +22,11 @@ import re
 import os,sys
 import numpy as np
 from copy import deepcopy
+
+SINGLE_ATTENTION_VECTOR = False
+APPLY_ATTENTION_BEFORE_LSTM = False
+TIME_STEPS = 128
+import pdb
 
 
 class LossHistory(Callback):
@@ -33,6 +40,22 @@ class LossHistory(Callback):
 class ModelBuilder(object):
     def __init__(self,conf):
         self.conf = conf
+
+    def attention_3d_block(self,inputs):
+        # inputs.shape = (batch_size, time_steps, input_dim)
+        input_dim = int(inputs.shape[2])
+        a = Permute((2, 1))(inputs)
+        a = Reshape((input_dim, TIME_STEPS))(a)
+        a = Dense(TIME_STEPS, activation='softmax')(a)
+        if SINGLE_ATTENTION_VECTOR:
+            a = Lambda(lambda x: K.mean(x, axis=1), name='attention_vec')(a)  # this is the attention vector!
+            a = RepeatVector(input_dim)(a)
+        else:
+            a = Lambda(lambda x: x, name='attention_vec')(a)  # trick to name a layer.
+        a_probs = Permute((2, 1))(a)
+        output_attention_mul = merge([inputs, a_probs], name='attention_mul', mode='mul')
+
+        return output_attention_mul
 
     def get_unique_id(self):
         num_epochs = self.conf['training']['num_epochs']
@@ -69,6 +92,7 @@ class ModelBuilder(object):
 
 
     def build_model(self,predict,custom_batch_size=None):
+
         conf = self.conf
         model_conf = conf['model']
         rnn_size = model_conf['rnn_size']
@@ -197,11 +221,14 @@ class ModelBuilder(object):
              stateful=stateful,kernel_regularizer=l2(regularization),recurrent_regularizer=l2(regularization),
              bias_regularizer=l2(regularization),dropout=dropout_prob,recurrent_dropout=dropout_prob) (x_in)
             x_in = Dropout(dropout_prob) (x_in)
+
+        attention_mul = self.attention_3d_block(x_in)
+        #attention_mul = Flatten()(attention_mul)
         if return_sequences:
             #x_out = TimeDistributed(Dense(100,activation='tanh')) (x_in)
-            x_out = TimeDistributed(Dense(1,activation=output_activation)) (x_in)
+            x_out = TimeDistributed(Dense(1,activation=output_activation)) (attention_mul)
         else:
-            x_out = Dense(1,activation=output_activation) (x_in)
+            x_out = Dense(1,activation=output_activation) (attention_mul)
         model = Model(inputs=x_input,outputs=x_out)
         model.compile(loss=loss_fn, optimizer=optimizer)
         #bug with tensorflow/Keras
