@@ -40,7 +40,7 @@ data:
     #the width of the actual window
     window_size: 10
     #TODO optimize
-    normalizer: 'meanvar'
+    normalizer: 'augvar'
     shallow_sample_prob: 0.1 #the fraction of samples with which to train the shallow model
     floatx: 'float64'
 

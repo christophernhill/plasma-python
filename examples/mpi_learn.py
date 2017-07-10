@@ -46,6 +46,8 @@ elif conf['data']['normalizer'] == 'var':
     from plasma.preprocessor.normalize import VarNormalizer as Normalizer #performs !much better than minmaxnormalizer
 elif conf['data']['normalizer'] == 'averagevar':
     from plasma.preprocessor.normalize import AveragingVarNormalizer as Normalizer #performs !much better than minmaxnormalizer
+elif conf['data']['normalizer'] == 'augvar':
+    from plasma.preprocessor.normalize import AugmentingVarNormalizer as Normalizer #performs !much better than minmaxnormalizer
 else:
     print('unkown normalizer. exiting')
     exit(1)
