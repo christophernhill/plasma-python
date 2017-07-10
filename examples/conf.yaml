@@ -89,7 +89,7 @@ training:
     max_patch_length: 100000
     #How many shots are we loading at once?
     num_shots_at_once: 200
-    num_epochs: 4
+    num_epochs: 400
     use_mock_data: False
     data_parallel: False
     hyperparam_tuning: False
