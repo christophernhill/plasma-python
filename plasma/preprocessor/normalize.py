@@ -387,5 +387,18 @@ class MinMaxNormalizer(Normalizer):
         #print('loading normalization data from {} shots, {} disruptive'.format(num_processed,num_disruptive))
 
 
+class AugmentingVarNormalizer(VarNormalizer):
+    def apply(self,shot):
+        super(AugmentingVarNormalizer,self).apply(shot)
+
+        for (i,sig) in enumerate(shot.signals):
+            if not self.conf['data']['augment_how']: continue
+            #apply deterministic augmentation to selected signals 
+            elif self.conf['data']['augment_how'] > 0: #if greater than 0 means augment at random selecting self.conf['data']['augment'] signals
+                self.conf['data']['signals_to_augment'] = np.random.choice(sig.description,self.conf['data']['augment'])
+            if sig.description in self.conf['data']['signals_to_augment']:
+                shot.signals_dict[sig] = shot.signals_dict[sig] + np.random.normal(0,10,shot.signals_dict[sig].shape)
+
+
 def get_individual_shot_file(prepath,shot_num,ext='.txt'):
     return prepath + str(shot_num) + ext 

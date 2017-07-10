@@ -3,7 +3,7 @@
 #will do stuff in fs_path / [username] / signal_data | shot_lists | processed shots, etc.
 
 fs_path: '/tigress'
-target: 'maxhinge' #'binary' #'hinge' 
+target: 'hinge' #'binary' #'maxhinge' 
 num_gpus: 4
 
 paths:
@@ -14,6 +14,8 @@ paths:
     specific_signals: [] #if left empty will use all valid signals defined on a machine. Only use if need a custom set
 
 data:
+    augment_how: 0 #if greater than 0 means augment at random selecting self.conf['data']['augment'] signals, -1 will augment deterministically from the signals_to_augment
+    signals_to_augment: [] #['plasma current']
     cut_shot_ends: True
     T_min_warn: 30
     recompute: False
@@ -38,7 +40,7 @@ data:
     #the width of the actual window
     window_size: 10
     #TODO optimize
-    normalizer: 'var'
+    normalizer: 'meanvar'
     shallow_sample_prob: 0.1 #the fraction of samples with which to train the shallow model
     floatx: 'float64'
 
